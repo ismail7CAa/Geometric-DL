@@ -3,9 +3,6 @@
 
 # In[21]:
 
-
-#================================================================SphereNet Model===================================================================
-
 # Import the SphereNet model class from DIG library 
 from dig.threedgraph.method import SphereNet  
 

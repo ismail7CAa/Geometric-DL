@@ -4,17 +4,14 @@
 # In[1]:
 
 
-#=================================================================================
-# Training and Evaluation Functions (train_eval_utils.ipynb)
-#=================================================================================
+
+# Training and Evaluation Functions
 
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-#--------------------------------------------------
 # Train epoch
-#--------------------------------------------------
 def train_epoch(model, loader, optimizer, device, accum_steps=16):
     """
     Perform one epoch of training.
@@ -51,9 +48,8 @@ def train_epoch(model, loader, optimizer, device, accum_steps=16):
         total_loss += loss.item() * accum_steps
 
     return total_loss / len(loader)
-#--------------------------------------------------------
+
 # Evaluate model
-#--------------------------------------------------------
 @torch.no_grad()
 def evaluate(model, loader, device, norm_means, norm_stds):
     """

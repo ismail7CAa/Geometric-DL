@@ -13,9 +13,8 @@
 # ---
 
 # %%
-#==========================================================
 # Load Packages 
-#==========================================================
+
 import os
 import torch
 import torch.nn as nn
@@ -23,23 +22,18 @@ import torch.nn.functional as F
 import numpy as np
 from equiformer_pytorch import Equiformer
 from torch_geometric.utils import to_dense_batch, to_dense_adj
-
+import os 
 
 # %%
-#======================================================================
 # Build Equiformer model
-#======================================================================
-
-#-------------------------------------------------------------
 # Define Equiformer 
-#-------------------------------------------------------------
 class EquiformerQM9(nn.Module):
     def __init__(self, n_token=11, n_out=19, hidden_dim=128):
         super().__init__()
 
         self.hidden_dim = hidden_dim
 
-        # 1) Atom feature embedding -> hidden_dim
+        # 1) Atom feature embedding 
         self.embedding = nn.Linear(n_token, hidden_dim)
 
         # 2) Equiformer core
@@ -53,7 +47,7 @@ class EquiformerQM9(nn.Module):
 
             heads=4,
             dim_head=hidden_dim // 4,   # 32 when hidden_dim=128
-            depth=1, # 8 stacked Equiformer blocks.Each block typically contains: equivariant graph attention, feed-forward / gating, equivariant normalization, residuals.
+            depth=1, 
 
             # --- key efficiency / "molecular graph" knobs ---
             attend_sparse_neighbors=True,  # requires adj_mat
@@ -62,7 +56,6 @@ class EquiformerQM9(nn.Module):
             max_sparse_neighbors=16,       # cap total sparse neighbors
 
             # we generally don't need valid_radius if we pass adj_mat,
-            # but if num_neighbors > 0 it will still use geometry to fetch nearest neighbors.
             valid_radius=5.0,
 
             reduce_dim_out=False,
@@ -92,15 +85,15 @@ class EquiformerQM9(nn.Module):
         # raise ValueError(f"Unexpected output shape from Equiformer: {x.shape}")
         
 
-    def encode(self, data):
+    def encode(self, data, mask=None):
         x, coords, batch = data.x, data.pos, data.batch
 
         # 1) Embed node features
         x = self.embedding(x)
 
         # 2) Dense batching : This is necessary because attention is usually implemented on dense tensors.
-        x, mask = to_dense_batch(x, batch)          
-        coords, _ = to_dense_batch(coords, batch)   
+        x, mask = to_dense_batch(x, batch)          # converts variable-length node lists into a padded dense tensor
+        coords, _ = to_dense_batch(coords, batch)   # converts coordinates to dense padded form too
 
         # 3) Build adjacency from bond graph (PyG edge_index)
         #    to_dense_adj returns float 0/1, convert to bool
@@ -111,7 +104,7 @@ class EquiformerQM9(nn.Module):
         adj_mat = to_dense_adj(data.edge_index, batch=batch).bool()  # (B, N, N)
 
         # 4) Forward through Equiformer using sparse neighbor attention
-        out = self.model(x, coords, mask=mask, adj_mat=adj_mat)
+        out = self.model(x, coords, mask=mask, adj_mat=adj_mat)  # runs Equiformer on dense atom features, coordinates, mask, and adjacency
 
         # 5) Extract invariant (degree-0) features safely
         if hasattr(out, "type0"):
@@ -123,10 +116,31 @@ class EquiformerQM9(nn.Module):
         else:
             x = out
 
-        # (B, N, F) node features -> masked mean pooling
+        # masked mean pooling
         mask_f = mask[:, :x.size(1)].float()
         x = (x * mask_f.unsqueeze(-1)).sum(dim=1) / mask_f.sum(dim=1, keepdim=True).clamp_min(1.0)
 
         return x
 
-# %%
+    
+    #     def encode_nodes(self, data):
+    #         x, coords, batch = data.x, data.pos, data.batch
+        
+    #         x = self.embedding(x)
+    #         x, mask = to_dense_batch(x, batch)
+    #         coords, _ = to_dense_batch(coords, batch)
+    #         adj_mat = to_dense_adj(data.edge_index, batch=batch).bool()
+        
+    #         out = self.model(x, coords, mask=mask, adj_mat=adj_mat)
+        
+    #         if hasattr(out, "type0"):
+    #             x = out.type0
+    #         elif isinstance(out, dict):
+    #             x = out.get(0, next(iter(out.values())))
+    #         elif isinstance(out, (list, tuple)):
+    #             x = out[0]
+    #         else:
+    #             x = out
+        
+    #         return x, mask
+# # %%
